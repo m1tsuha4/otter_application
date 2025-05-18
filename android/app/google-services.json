@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "265017466798",
+    "project_id": "otter-b864a",
+    "storage_bucket": "otter-b864a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:265017466798:android:04b9943a9508e04badb23f",
+        "android_client_info": {
+          "package_name": "com.example.otter_application_v1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDbFGpPm-sDdNbKfc74nHpwdPtrE2hN-zg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
