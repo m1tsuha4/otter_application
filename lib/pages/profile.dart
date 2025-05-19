@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -9,31 +9,44 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  final FirebaseAuth auth = FirebaseAuth.instance;
+  final SupabaseClient supabase = Supabase.instance.client;
   final TextEditingController _nameController = TextEditingController();
 
-  User? get user => auth.currentUser;
+  User? get user => supabase.auth.currentUser;
 
   @override
   void initState() {
     super.initState();
-    _nameController.text = user?.displayName ?? '';
+    _loadUserData();
   }
 
-  void logout(BuildContext context) async {
-    await auth.signOut();
-    Navigator.pushReplacementNamed(context, '/login');
+  void _loadUserData() {
+    final userMetadata = user?.userMetadata;
+    _nameController.text = userMetadata?['display_name'] ?? '';
   }
 
   Future<void> updateProfile() async {
-    if (user != null) {
-      await user!.updateDisplayName(_nameController.text.trim());
-      await user!.reload();
+    final displayName = _nameController.text.trim();
+
+    final response = await supabase.auth.updateUser(
+      UserAttributes(data: {'display_name': displayName}),
+    );
+
+    if (response.user != null) {
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile updated successfully')),
       );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update profile')),
+      );
     }
+  }
+
+  void logout(BuildContext context) async {
+    await supabase.auth.signOut();
+    Navigator.pushReplacementNamed(context, '/login');
   }
 
   void _onTabTapped(int index) {
@@ -51,8 +64,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final displayName = user?.displayName ?? 'No name';
     final email = user?.email ?? 'No email';
+    final displayName = user?.userMetadata?['display_name'] ?? 'No name';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFFFFF),
@@ -73,7 +86,6 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            // Avatar & Name
             Center(
               child: Column(
                 children: [
@@ -99,9 +111,9 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 30),
 
-            // Display Name Update Card
+            // Update Display Name
             Card(
-              color: Color(0xFFF9F5E3),
+              color: const Color(0xFFF9F5E3),
               elevation: 2,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               child: Padding(
@@ -131,7 +143,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         icon: const Icon(Icons.save),
                         label: const Text('Save'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF5C2E00),
+                          backgroundColor: const Color(0xFF5C2E00),
                           foregroundColor: Colors.white,
                         ),
                       ),
@@ -140,10 +152,9 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 30),
 
-            // Logout Button
+            // Logout
             Card(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               color: Colors.red[100],

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'pages/login.dart';
 import 'pages/register.dart';
@@ -10,8 +9,13 @@ import 'pages/history.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp();
-  runApp(MyApp());
+
+  await Supabase.initialize(
+    url: 'https://knplpprdnkqgbgfqpcoh.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtucGxwcHJkbmtxZ2JnZnFwY29oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NjAxNjMsImV4cCI6MjA2MzEzNjE2M30.M8D7it9pthcAUFp_8q0FdcekCUz1OyzIdMrNcyOy7f8',
+  );
+
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
@@ -20,8 +24,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Firebase Auth App',
-      initialRoute: FirebaseAuth.instance.currentUser == null ? '/login' : '/home',
+      title: 'Supabase Auth App',
+      initialRoute: Supabase.instance.client.auth.currentUser == null ? '/login' : '/home',
       routes: {
         '/login': (context) => LoginPage(),
         '/register': (context) => RegisterPage(),

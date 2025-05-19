@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -68,6 +70,29 @@ class _HomePageBodyState extends State<HomePageBody> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
 
+  Future<List<Map<String, dynamic>>> fetchDetections() async {
+    final response = await Supabase.instance.client
+        .from('detections')
+        .select()
+        .order('timestamp', ascending: false)
+        .limit(6);
+
+    if (response == null) {
+      return [];
+    }
+
+    List<Map<String, dynamic>> detections = List<Map<String, dynamic>>.from(response);
+
+    if (searchQuery.isNotEmpty) {
+      detections = detections.where((item) {
+        final className = (item['class_name'] ?? '').toString().toLowerCase();
+        return className.contains(searchQuery.toLowerCase());
+      }).toList();
+    }
+
+    return detections;
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -89,7 +114,6 @@ class _HomePageBodyState extends State<HomePageBody> {
     return Column(
       children: [
         const SizedBox(height: 20),
-        // Header image
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: ClipRRect(
@@ -103,8 +127,6 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
         const SizedBox(height: 20),
-
-        // Search bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Container(
@@ -128,7 +150,6 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
         const SizedBox(height: 16),
-
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Align(
@@ -140,47 +161,34 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
         const SizedBox(height: 10),
-
-        // Stream section
         Expanded(
-          child: StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('detections')
-                .orderBy('timestamp', descending: true)
-                .limit(6)
-                .snapshots(),
+          child: FutureBuilder<List<Map<String, dynamic>>>(
+            future: fetchDetections(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              if (!snapshot.hasData) {
-                return const Center(child: Text("No data found."));
-              }
-
-              List<DocumentSnapshot> detections = snapshot.data!.docs;
-
-              if (searchQuery.isNotEmpty) {
-                detections = detections.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  final className = (data['class_name'] ?? '').toString().toLowerCase();
-                  return className.contains(searchQuery.toLowerCase());
-                }).toList();
-              }
-
-              if (detections.isEmpty) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return const Center(child: Text('No results found'));
               }
+
+              final detections = snapshot.data!;
 
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: detections.length,
                 itemBuilder: (context, index) {
-                  final data = detections[index].data() as Map<String, dynamic>;
+                  final data = detections[index];
                   String date = 'Unknown';
-                  if (data['timestamp'] is Timestamp) {
-                    DateTime dateTime = data['timestamp'].toDate();
-                    date = DateFormat('yyyy-MM-dd HH:mm').format(dateTime);
+
+                  if (data['timestamp'] != null) {
+                    try {
+                      final parsedDate = DateTime.parse(data['timestamp']).toLocal();
+                      date = DateFormat('yyyy-MM-dd HH:mm').format(parsedDate);
+                    } catch (e) {
+                      date = data['timestamp'].toString();
+                    }
                   }
 
                   return Container(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart'
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -12,7 +13,6 @@ class _RegisterPageState extends State<RegisterPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final confirmController = TextEditingController();
-  final auth = FirebaseAuth.instance;
   String error = '';
   bool _obscurePassword = true;
 
@@ -23,7 +23,6 @@ class _RegisterPageState extends State<RegisterPage> {
     final password = passwordController.text.trim();
     final confirm = confirmController.text.trim();
 
-    // Local validations
     if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
       setState(() => error = 'Please fill in all fields');
       return;
@@ -34,31 +33,15 @@ class _RegisterPageState extends State<RegisterPage> {
       return;
     }
 
-    try {
-      await auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+    final response = await Supabase.instance.client.auth.signUp(
+      email: email,
+      password: password,
+    );
+
+    if (response.user != null) {
       Navigator.pushReplacementNamed(context, '/home');
-    } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'email-already-in-use':
-          errorMessage = 'Email is already in use.';
-          break;
-        case 'invalid-email':
-          errorMessage = 'The email address is not valid.';
-          break;
-        case 'operation-not-allowed':
-          errorMessage = 'Operation not allowed. Please contact support.';
-          break;
-        case 'weak-password':
-          errorMessage = 'Password is too weak. Use at least 6 characters.';
-          break;
-        default:
-          errorMessage = 'Registration failed. Please try again.';
-      }
-      setState(() => error = errorMessage);
+    } else {
+      setState(() => error = 'Registration failed. No user returned.');
     }
   }
 

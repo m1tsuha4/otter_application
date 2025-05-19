@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// import 'package:firebase_auth/firebase_auth.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,40 +12,33 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
-  final auth = FirebaseAuth.instance;
   String error = '';
   bool _obscurePassword = true;
 
-  void login() async {
-    setState(() => error = ''); // Clear previous error
+  Future<void> login() async {
+    setState(() => error = '');
+
+    final email = emailController.text.trim();
+    final password = passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => error = 'Please fill in all fields.');
+      return;
+    }
+
     try {
-      await auth.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
-      Navigator.pushReplacementNamed(context, '/home');
-    } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'invalid-email':
-          errorMessage = 'Invalid email address.';
-          break;
-        case 'user-disabled':
-          errorMessage = 'User has been disabled.';
-          break;
-        case 'user-not-found':
-          errorMessage = 'No user found for that email.';
-          break;
-        case 'wrong-password':
-          errorMessage = 'Wrong password provided.';
-          break;
-        case 'too-many-requests':
-          errorMessage = 'Too many attempts. Try again later.';
-          break;
-        default:
-          errorMessage = 'Login failed. Please try again.';
+      final response = await Supabase.instance.client.auth
+          .signInWithPassword(email: email, password: password);
+
+      if (response.user != null) {
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        setState(() => error = 'Login failed. Please try again.');
       }
-      setState(() => error = errorMessage);
+    } on AuthException catch (e) {
+      setState(() => error = e.message);
+    } catch (e) {
+      setState(() => error = 'Unexpected error. Please try again.');
     }
   }
 
