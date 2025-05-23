@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:google_fonts/google_fonts.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,16 +13,36 @@ class _LoginPageState extends State<LoginPage> {
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   String error = '';
+  bool _isLoading = false;
   bool _obscurePassword = true;
 
+  final Color brownColor = const Color(0xFF5C2E00);
+  final Color creamColor = const Color(0xFFF9F5E3);
+  final Color scaffoldBgColor = Colors.white;
+
+  final double fieldHeight = 58.0;
+  final double fieldBorderRadius = 30.0;
+  // Define a clear vertical padding for content within the TextField.
+  // For a fieldHeight of 58, vertical padding of 18 leaves 58 - 18*2 = 22 for text, which is good.
+  final double textFieldVerticalContentPadding = 18.0;
+
+
   Future<void> login() async {
-    setState(() => error = '');
+    setState(() {
+      error = '';
+      _isLoading = true;
+    });
 
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      setState(() => error = 'Please fill in all fields.');
+      if (mounted) {
+        setState(() {
+          error = 'Please fill in all fields.';
+          _isLoading = false;
+        });
+      }
       return;
     }
 
@@ -30,162 +50,204 @@ class _LoginPageState extends State<LoginPage> {
       final response = await Supabase.instance.client.auth
           .signInWithPassword(email: email, password: password);
 
-      if (response.user != null) {
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        setState(() => error = 'Login failed. Please try again.');
+      if (mounted) {
+        if (response.user != null) {
+          Navigator.pushReplacementNamed(context, '/home');
+        } else {
+          setState(() {
+            error = 'Login failed. Please check your credentials.';
+            _isLoading = false;
+          });
+        }
       }
     } on AuthException catch (e) {
-      setState(() => error = e.message);
+      if (mounted) {
+        setState(() {
+          error = e.message;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() => error = 'Unexpected error. Please try again.');
+      if (mounted) {
+        setState(() {
+          error = 'An unexpected error occurred. Please try again.';
+          _isLoading = false;
+        });
+      }
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
-    final Color brown = Color(0xFF5C2E00);
-    final Color cream = Color(0xFFF9F5E3);
-
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: scaffoldBgColor,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Image
             Image.asset(
-              'assets/images/otter_tao.png', // make sure this path is correct
+              'assets/images/otter_tao.png',
               height: 120,
             ),
-
-            SizedBox(height: 20),
-
-            // Welcome text
+            const SizedBox(height: 20),
             Text(
-              'WELCOME',
+              'LOGIN',
               style: TextStyle(
                 fontSize: 28,
                 fontWeight: FontWeight.bold,
+                color: brownColor,
               ),
             ),
-
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
 
             // Email field
-            Container(
-              decoration: BoxDecoration(
-                color: brown,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 20),
+            SizedBox(
+              height: fieldHeight,
               child: TextField(
                 controller: emailController,
-                style: TextStyle(color: Colors.white),
+                textAlignVertical: TextAlignVertical.center,
+                style: const TextStyle(color: Colors.black87),
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.email_outlined, color: brownColor),
                   hintText: 'Email',
-                  hintStyle: TextStyle(color: Colors.white70),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-
-            SizedBox(height: 16),
-
-            // Password field
-            Container(
-              height: 50, // Ensure consistent height
-              decoration: BoxDecoration(
-                color: brown,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: Center(
-                child: TextField(
-                  controller: passwordController,
-                  obscureText: _obscurePassword,
-                  style: TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Password',
-                    hintStyle: TextStyle(color: Colors.white70),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(vertical: 14), // Center text vertically
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                        color: Colors.white,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
+                  hintStyle: const TextStyle(color: Colors.black54),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: textFieldVerticalContentPadding, // Applied consistent padding
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: brownColor),
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: brownColor, width: 2),
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                    borderSide: const BorderSide(color: Colors.red, width: 1),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                    borderSide: const BorderSide(color: Colors.red, width: 2),
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: 16),
 
-
-            SizedBox(height: 10),
-
-            // Forgot Password (non-functional for now)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(
-                onPressed: () {}, // Add your route or action here
-                child: Text(
-                  'Forgot Password ?',
-                  style: TextStyle(color: Colors.black),
+            // Password field
+            SizedBox(
+              height: fieldHeight,
+              child: TextField(
+                controller: passwordController,
+                obscureText: _obscurePassword,
+                textAlignVertical: TextAlignVertical.center,
+                style: const TextStyle(color: Colors.black87),
+                decoration: InputDecoration(
+                  prefixIcon: Icon(Icons.lock_outline, color: brownColor),
+                  hintText: 'Password',
+                  hintStyle: const TextStyle(color: Colors.black54),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: textFieldVerticalContentPadding, // Applied consistent padding
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: brownColor),
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: brownColor, width: 2),
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                    borderSide: const BorderSide(color: Colors.red, width: 1),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(fieldBorderRadius),
+                    borderSide: const BorderSide(color: Colors.red, width: 2),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: brownColor,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _obscurePassword = !_obscurePassword;
+                      });
+                    },
+                    // You can also try adding padding: EdgeInsets.zero here if needed,
+                    // but suffixIconConstraints is often more direct.
+                  ),
+                  // Key Change: Add suffixIconConstraints
+                  suffixIconConstraints: const BoxConstraints(
+                    maxHeight: 36, // Limit the height the suffix icon can influence
+                    // minHeight: 36, // Optionally set minHeight if needed
+                  ),
                 ),
               ),
             ),
-
-            // Error message
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Forgot Password clicked (not implemented yet).'))
+                  );
+                },
+                child: Text(
+                  'Forgot Password?',
+                  style: TextStyle(color: brownColor.withOpacity(0.8)),
+                ),
+              ),
+            ),
             if (error.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
+                padding: const EdgeInsets.only(top: 0, bottom: 10.0),
                 child: Text(
                   error,
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                   textAlign: TextAlign.center,
                 ),
               ),
-
-            SizedBox(height: 10),
-
-            // Login button
-            ElevatedButton(
+            _isLoading
+                ? CircularProgressIndicator(color: brownColor)
+                : ElevatedButton(
               onPressed: login,
               style: ElevatedButton.styleFrom(
-                backgroundColor: cream,
+                backgroundColor: brownColor,
+                foregroundColor: creamColor,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(fieldBorderRadius),
                 ),
-                padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              child: Text(
-                'Login',
-                style: TextStyle(color: Colors.black),
-              ),
+              child: const Text('Login'),
             ),
-
-            SizedBox(height: 20),
-
-            // Sign up link
+            const SizedBox(height: 25),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text("Don’t have account? "),
+                const Text("Don't have an account? ", style: TextStyle(color: Colors.black54)),
                 GestureDetector(
-                  onTap: () => Navigator.pushNamed(context, '/register'),
+                  onTap: () {
+                    if(mounted){
+                      setState(() { error = ''; });
+                    }
+                    Navigator.pushReplacementNamed(context, '/register');
+                  },
                   child: Text(
                     'Sign Up',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.black,
+                      color: brownColor,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ),
