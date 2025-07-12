@@ -1,12 +1,155 @@
 import 'package:flutter/material.dart';
-// import 'package:cloud_firestore/cloud_firestore.dart'; // Not used in the provided snippet for Supabase
 import 'package:intl/intl.dart';
-import 'dart:async';
+import 'dart:async'; // Still needed for Timer for debounce
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// ImageDetailPage class should be defined here or imported
-// (Definition of ImageDetailPage from above)
+// Video Player related imports (now directly in home.dart as VideoDetailPage is here)
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 
+
+// =============================================================================
+// VideoDetailPage: Widget to display the video event (DEFINED HERE IN HOME.DART)
+// =============================================================================
+class VideoDetailPage extends StatefulWidget {
+  final String videoUrl;
+  final String eventType;
+  final String eventTime;
+  final String trackId;
+  final String duration;
+
+  const VideoDetailPage({
+    super.key,
+    required this.videoUrl,
+    required this.eventType,
+    required this.eventTime,
+    required this.trackId,
+    required this.duration,
+  });
+
+  @override
+  _VideoDetailPageState createState() => _VideoDetailPageState();
+}
+
+class _VideoDetailPageState extends State<VideoDetailPage> {
+  late VideoPlayerController _videoPlayerController;
+  ChewieController? _chewieController;
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideoPlayer();
+  }
+
+  Future<void> _initializeVideoPlayer() async {
+    try {
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      await _videoPlayerController.initialize();
+      print("DEBUG: Video initialized successfully: ${widget.videoUrl}");
+
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController,
+        autoPlay: true, // Auto-play the video
+        looping: false, // Don't loop the video
+        errorBuilder: (context, errorMessage) {
+          print("DEBUG: Chewie Error: $errorMessage");
+          return Center(
+            child: Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.white),
+            ),
+          );
+        },
+      );
+      print("DEBUG: Chewie controller initialized.");
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("DEBUG ERROR: Error initializing video: $e");
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load video: $e';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Color appBarBackgroundColor = const Color(0xFFFAF5E4);
+    final Color iconColor = const Color(0xFF5C2C06); // brownColor
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: appBarBackgroundColor,
+        elevation: 0,
+        title: const Text(
+          'Video Event',
+          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+        ),
+        iconTheme: IconThemeData(color: iconColor),
+        centerTitle: true,
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(iconColor)))
+          : _errorMessage.isNotEmpty
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 50),
+            const SizedBox(height: 10),
+            Text(_errorMessage, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            Text('Video URL: ${widget.videoUrl}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
+        ),
+      )
+          : Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: _chewieController != null && _chewieController!.videoPlayerController.value.isInitialized
+                  ? AspectRatio(
+                aspectRatio: _chewieController!.aspectRatio ?? _videoPlayerController.value.aspectRatio,
+                child: Chewie(controller: _chewieController!),
+              )
+                  : const CircularProgressIndicator(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Event Type: ${widget.eventType}', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text('Time: ${widget.eventTime}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Track ID: ${widget.trackId}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Duration: ${widget.duration} seconds', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// HomePage: Main page for Home screen
+// =============================================================================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -34,7 +177,7 @@ class _HomePageState extends State<HomePage> {
       ),
       body: const HomePageBody(),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
+        currentIndex: 0, // Set to 0 for Home page
         backgroundColor: const Color(0xFFFAF5E4),
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.black54,
@@ -61,6 +204,9 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+// =============================================================================
+// HomePageBody: Fetches and displays recent video events (NO FILTERS/SEARCH)
+// =============================================================================
 class HomePageBody extends StatefulWidget {
   const HomePageBody({super.key});
 
@@ -71,61 +217,52 @@ class HomePageBody extends StatefulWidget {
 class _HomePageBodyState extends State<HomePageBody> {
   String searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce;
+  Timer? _debounce; // Still keep Timer for debounce if onSearchChanged is present.
 
-  // Define colors for consistent styling
   final Color brownColor = const Color(0xFF5C2C06);
-  final Color cardBackgroundColor = Colors.white; // Or use const Color(0xFFFAF5E4) for cream
-  final Color textOnCardColor = Colors.black87; // Main text color on the card
-  final Color subTextOnCardColor = Colors.black54; // Subtitle text color on the card
+  final Color cardBackgroundColor = Colors.white;
+  final Color textOnCardColor = Colors.black87;
+  final Color subTextOnCardColor = Colors.black54;
+  final Color searchFillColor = Colors.white;
+  final Color searchBorderColor = const Color(0xFF5C2C06);
+  final Color searchIconColor = const Color(0xFF5C2C06);
+  final Color searchTextColor = Colors.black87;
+  final Color searchHintColor = Colors.black54;
 
-  Future<List<Map<String, dynamic>>> fetchDetections() async {
-    final response = await Supabase.instance.client
-        .from('detections')
+
+  // fetchRecentVideoEvents: Fetches only the 6 most recent video events
+  Future<List<Map<String, dynamic>>> fetchRecentVideoEvents() async {
+    final supabase = Supabase.instance.client;
+
+    // Fetch directly, no filters applied here.
+    // Order by 'created_at' descending and limit to 6.
+    final response = await supabase
+        .from('otter_video_events') // Fetch from your video events table
         .select()
-        .order('timestamp', ascending: false)
-        .limit(6); // Fetching only 6 for "Recent"
+        .order('created_at', ascending: false) // Order by most recent
+        .limit(6); // Limit to 6 recent items
 
-    // Error handling for response (Supabase specific, original code had a `response == null` check which is good)
-    // if (response.error != null) { // Supabase newer SDKs might use response.error
-    //   print('Error fetching detections: ${response.error!.message}');
-    //   return [];
-    // }
-    // if (response.data == null) { // Or check data directly
-    //    return [];
-    // }
-    // List<Map<String, dynamic>> detections = List<Map<String, dynamic>>.from(response.data as List);
-
-    // Adapting to the original code's response handling:
-    if (response == null) { // This check might depend on the Supabase client version and specific call
-      print('Error fetching detections: Response was null');
+    if (response is List) {
+      return List<Map<String, dynamic>>.from(response);
+    } else {
+      print("Supabase fetchRecentVideoEvents: Unexpected non-list response format: $response");
       return [];
     }
-    // Assuming response directly contains the list or has a property that does.
-    // The original code implies `response` itself is the list after a successful call.
-    List<Map<String, dynamic>> detections = List<Map<String, dynamic>>.from(response as List);
-
-
-    if (searchQuery.isNotEmpty) {
-      detections = detections.where((item) {
-        final className = (item['class_name'] ?? '').toString().toLowerCase();
-        return className.contains(searchQuery.toLowerCase());
-      }).toList();
-    }
-    return detections;
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _debounce?.cancel();
+    _debounce?.cancel(); // Dispose debounce if it was used.
     super.dispose();
   }
 
   void onSearchChanged(String query) {
+    // This method is still defined but the TextField calling it is removed from UI.
+    // It's benign to keep it or you can remove it if you're sure.
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) { // Check if widget is still in the tree
+      if (mounted) {
         setState(() {
           searchQuery = query;
         });
@@ -135,12 +272,6 @@ class _HomePageBodyState extends State<HomePageBody> {
 
   @override
   Widget build(BuildContext context) {
-    final Color searchFillColor = Colors.white; // Or const Color(0xFFFAF5E4) if you prefer cream
-    final Color searchBorderColor = brownColor;
-    final Color searchIconColor = brownColor;
-    final Color searchTextColor = Colors.black87;
-    final Color searchHintColor = Colors.black54;
-
     return Column(
       children: [
         const SizedBox(height: 20),
@@ -157,44 +288,14 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
         const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          // The Container that was previously brown is now removed.
-          // We style the TextField directly.
-          child: TextField(
-            controller: _searchController,
-            onChanged: onSearchChanged,
-            style: TextStyle(color: searchTextColor), // Dark text color for input
-            decoration: InputDecoration(
-              hintText: 'Search recent detections...', // More descriptive hint
-              hintStyle: TextStyle(color: searchHintColor), // Dark hint text color
-              prefixIcon: Icon(Icons.search, color: searchIconColor), // Dark search icon
-              filled: true, // Important: To make fillColor work
-              fillColor: searchFillColor, // Light background color for the TextField
-              contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20), // Adjust padding as needed
-              border: OutlineInputBorder( // Default border
-                borderRadius: BorderRadius.circular(20.0), // Matching image border radius
-                borderSide: BorderSide(color: searchBorderColor, width: 1.5),
-              ),
-              enabledBorder: OutlineInputBorder( // Border when TextField is enabled but not focused
-                borderRadius: BorderRadius.circular(20.0),
-                borderSide: BorderSide(color: searchBorderColor, width: 1.5),
-              ),
-              focusedBorder: OutlineInputBorder( // Border when TextField is focused
-                borderRadius: BorderRadius.circular(20.0),
-                borderSide: BorderSide(color: searchBorderColor, width: 2.0), // Thicker or different color on focus
-              ),
-              // Optional: Add errorBorder, disabledBorder if needed
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
+        // Removed: Search Bar UI entirely from this build method.
+        // The TextField and its styling are gone.
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'Recent',
+              'Recent Events',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
           ),
@@ -202,65 +303,71 @@ class _HomePageBodyState extends State<HomePageBody> {
         const SizedBox(height: 10),
         Expanded(
           child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: fetchDetections(),
+            future: fetchRecentVideoEvents(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator(color: brownColor));
               }
 
-              if (snapshot.hasError) { // Added error handling for FutureBuilder
+              if (snapshot.hasError) {
+                print("Error in FutureBuilder (HomePage): ${snapshot.error}");
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
 
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                // If search is active, show "No results for..."
-                if (searchQuery.isNotEmpty) {
-                  return Center(child: Text("No results found for '$searchQuery'"));
-                }
-                return const Center(child: Text('No recent detections found.'));
+                // Simplified message as search is not active on this page.
+                return const Center(child: Text('No recent video events found.'));
               }
 
-              final detections = snapshot.data!;
+              final videoEvents = snapshot.data!;
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Added vertical padding
-                itemCount: detections.length,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                itemCount: videoEvents.length,
                 itemBuilder: (context, index) {
-                  final data = detections[index];
-                  String date = 'Unknown date';
-
-                  if (data['timestamp'] != null) {
+                  final data = videoEvents[index];
+                  final eventType = data['event_type'] ?? 'Unknown Event';
+                  final timestampStr = data['created_at']?.toString();
+                  String date = 'Unknown Date';
+                  if (timestampStr != null) {
                     try {
-                      // Ensure timestamp is a string before parsing
-                      final String timestampStr = data['timestamp'].toString();
                       final parsedDate = DateTime.parse(timestampStr).toLocal();
                       date = DateFormat('yyyy-MM-dd HH:mm').format(parsedDate);
                     } catch (e) {
-                      // If parsing fails, use the original timestamp string
-                      date = data['timestamp'].toString();
-                      print("Error parsing date: $e, original value: ${data['timestamp']}");
+                      date = timestampStr;
                     }
                   }
+                  final videoUrl = data['video_url'] as String?;
+
+                  // Other video details are available in data, but only passed to VideoDetailPage
+                  final trackId = data['track_id']?.toString() ?? 'N/A';
+                  final duration = data['duration_sec']?.toStringAsFixed(1) ?? 'N/A';
+
 
                   return InkWell(
                     onTap: () {
-                      final imageUrl = data['image_url'] as String?;
-                      if (imageUrl != null && imageUrl.isNotEmpty) {
+                      if (videoUrl != null && videoUrl.isNotEmpty) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ImageDetailPage(imageUrl: imageUrl),
+                            builder: (context) => VideoDetailPage(
+                              videoUrl: videoUrl,
+                              eventType: eventType,
+                              eventTime: date,
+                              trackId: trackId,
+                              duration: duration,
+                            ),
                           ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image not available for this item.')),
+                          const SnackBar(content: Text('Video not available for this event.')),
                         );
                       }
                     },
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(2), // Small padding for visual separation of border
+                      padding: const EdgeInsets.all(2),
                       decoration: BoxDecoration(
                         color: cardBackgroundColor,
                         borderRadius: BorderRadius.circular(16),
@@ -273,52 +380,42 @@ class _HomePageBodyState extends State<HomePageBody> {
                             color: Colors.grey.withOpacity(0.2),
                             spreadRadius: 1,
                             blurRadius: 3,
-                            offset: const Offset(0, 2), // changes position of shadow
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8), // Slightly smaller radius for leading image
-                          child: Image.network(
-                            data['image_url'] ?? '',
-                            width: 70, // Adjusted size
-                            height: 70, // Adjusted size
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              width: 70,
-                              height: 70,
+                        leading: (videoUrl != null && videoUrl.isNotEmpty)
+                            ? SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
                               color: Colors.grey[200],
-                              child: Icon(Icons.broken_image_outlined, color: Colors.grey[500]),
+                              child: const Icon(Icons.videocam, color: Colors.blueGrey, size: 40),
                             ),
-                            loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return SizedBox(
-                                width: 70,
-                                height: 70,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.0,
-                                    valueColor: AlwaysStoppedAnimation<Color>(brownColor),
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                        : null,
-                                  ),
-                                ),
-                              );
-                            },
                           ),
+                        )
+                            : Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[200],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.video_camera_back_outlined, color: Colors.grey[500], size: 30),
                         ),
                         title: Text(
-                          data['class_name'] ?? 'Unknown Class',
+                          eventType,
                           style: TextStyle(
                               color: textOnCardColor,
                               fontSize: 16,
                               fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
-                          'Date: $date',
+                          date,
                           style: TextStyle(color: subTextOnCardColor, fontSize: 13),
                         ),
                       ),
@@ -330,69 +427,6 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
       ],
-    );
-  }
-}
-
-// Definition of ImageDetailPage (as provided before)
-// Ensure this class is defined in this file or imported from another file.
-class ImageDetailPage extends StatelessWidget {
-  final String imageUrl;
-
-  const ImageDetailPage({super.key, required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    final Color appBarBackgroundColor = const Color(0xFFFAF5E4);
-    final Color iconColor = const Color(0xFF5C2C06);
-
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: appBarBackgroundColor,
-        elevation: 0,
-        title: const Text(
-          'Image View',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        iconTheme: IconThemeData(color: iconColor),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: InteractiveViewer(
-          panEnabled: true,
-          boundaryMargin: const EdgeInsets.all(20),
-          minScale: 0.5,
-          maxScale: 4,
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.contain,
-            loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(iconColor),
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red, size: 50),
-                    SizedBox(height: 10),
-                    Text('Could not load image.', style: TextStyle(color: Colors.white)),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
     );
   }
 }

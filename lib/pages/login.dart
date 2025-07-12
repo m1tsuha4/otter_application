@@ -192,20 +192,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Forgot Password clicked (not implemented yet).'))
-                  );
-                },
-                child: Text(
-                  'Forgot Password?',
-                  style: TextStyle(color: brownColor.withOpacity(0.8)),
-                ),
-              ),
-            ),
+
             if (error.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 0, bottom: 10.0),

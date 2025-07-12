@@ -1,19 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'dart:async';
+import 'dart:async'; // For Timer for debounce
+import 'package:video_player/video_player.dart'; // For video playback
+import 'package:chewie/chewie.dart'; // For video player UI
 
-// Assuming ImageDetailPage is in a separate file or defined in home_page.dart and imported if needed
-// For this example, I'll assume ImageDetailPage is accessible.
-// If not, you'll need to copy its definition or import it.
-// import 'path_to_image_detail_page.dart'; // Example import
 
-// Re-defining ImageDetailPage here for completeness if it's not imported
-// (Ideally, this would be in its own file or a shared utility file)
-class ImageDetailPage extends StatelessWidget {
-  final String imageUrl;
+// =============================================================================
+// VideoDetailPage: Widget to display the video event
+// =============================================================================
+class VideoDetailPage extends StatefulWidget {
+  final String videoUrl;
+  final String eventType;
+  final String eventTime;
+  final String trackId;
+  final String duration;
 
-  const ImageDetailPage({super.key, required this.imageUrl});
+  const VideoDetailPage({
+    super.key,
+    required this.videoUrl,
+    required this.eventType,
+    required this.eventTime,
+    required this.trackId,
+    required this.duration,
+  });
+
+  @override
+  _VideoDetailPageState createState() => _VideoDetailPageState();
+}
+
+class _VideoDetailPageState extends State<VideoDetailPage> {
+  late VideoPlayerController _videoPlayerController;
+  ChewieController? _chewieController;
+  bool _isLoading = true;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeVideoPlayer();
+  }
+
+  Future<void> _initializeVideoPlayer() async {
+    try {
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      await _videoPlayerController.initialize();
+      print("DEBUG: Video initialized successfully: ${widget.videoUrl}");
+
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController,
+        autoPlay: true,
+        looping: false,
+        errorBuilder: (context, errorMessage) {
+          print("DEBUG: Chewie Error: $errorMessage");
+          return Center(
+            child: Text(
+              errorMessage,
+              style: const TextStyle(color: Colors.white),
+            ),
+          );
+        },
+      );
+      print("DEBUG: Chewie controller initialized.");
+
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print("DEBUG ERROR: Error initializing video: $e");
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Failed to load video: $e';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,52 +93,61 @@ class ImageDetailPage extends StatelessWidget {
         backgroundColor: appBarBackgroundColor,
         elevation: 0,
         title: const Text(
-          'Image View',
+          'Video Event',
           style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
         ),
         iconTheme: IconThemeData(color: iconColor),
         centerTitle: true,
       ),
-      body: Center(
-        child: InteractiveViewer(
-          panEnabled: true,
-          boundaryMargin: const EdgeInsets.all(20),
-          minScale: 0.5,
-          maxScale: 4,
-          child: Image.network(
-            imageUrl,
-            fit: BoxFit.contain,
-            loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(iconColor),
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              );
-            },
-            errorBuilder: (context, error, stackTrace) {
-              return const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, color: Colors.red, size: 50),
-                    SizedBox(height: 10),
-                    Text('Could not load image.', style: TextStyle(color: Colors.white)),
-                  ],
-                ),
-              );
-            },
-          ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(iconColor)))
+          : _errorMessage.isNotEmpty
+          ? Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 50),
+            const SizedBox(height: 10),
+            Text(_errorMessage, style: const TextStyle(color: Colors.white)),
+            const SizedBox(height: 10),
+            Text('Video URL: ${widget.videoUrl}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          ],
         ),
+      )
+          : Column(
+        children: [
+          Expanded(
+            child: Center(
+              child: _chewieController != null && _chewieController!.videoPlayerController.value.isInitialized
+                  ? AspectRatio(
+                aspectRatio: _chewieController!.aspectRatio ?? _videoPlayerController.value.aspectRatio,
+                child: Chewie(controller: _chewieController!),
+              )
+                  : const CircularProgressIndicator(),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Event Type: ${widget.eventType}', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Text('Time: ${widget.eventTime}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Track ID: ${widget.trackId}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Duration: ${widget.duration} seconds', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-
+// =============================================================================
+// HistoryPage: Main page for history
+// =============================================================================
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
 
@@ -125,6 +201,9 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 }
 
+// =============================================================================
+// HistoryPageBody: Fetches and displays the list of video events with filters
+// =============================================================================
 class HistoryPageBody extends StatefulWidget {
   const HistoryPageBody({super.key});
 
@@ -140,10 +219,9 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
   DateTime? _startDate;
   DateTime? _endDate;
 
-  // Define colors for consistent styling (same as HomePage)
   final Color brownColor = const Color(0xFF5C2C06);
-  final Color lightFillColor = Colors.white; // For search bar and date pickers
-  final Color cardBackgroundColor = Colors.white; // Or const Color(0xFFFAF5E4) for cream cards
+  final Color lightFillColor = Colors.white;
+  final Color cardBackgroundColor = Colors.white;
   final Color textOnCardColor = Colors.black87;
   final Color subTextOnCardColor = Colors.black54;
   final Color iconAndBorderColor = const Color(0xFF5C2C06);
@@ -163,70 +241,49 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
       if(mounted){
         setState(() {
           searchQuery = query;
+          // No GlobalKey needed, setState will rebuild FutureBuilder
         });
       }
     });
   }
 
-  Future<List<Map<String, dynamic>>> fetchDetections() async {
+  Future<List<Map<String, dynamic>>> fetchVideoEvents() async {
     final supabase = Supabase.instance.client;
 
-    // Base query
-    var queryBuilder = supabase
-        .from('detections')
-        .select()
-        .order('timestamp', ascending: false);
-    // .limit(50); // Consider pagination if dataset is large
+    // Start with the base query as PostgrestFilterBuilder
+    // This type supports gte, lte, ilike, and order.
+    PostgrestFilterBuilder<List<Map<String, dynamic>>> query = supabase
+        .from('otter_video_events')
+        .select(); // .select() returns a builder that supports filters and order
 
-    // Apply date filters directly in Supabase query if possible for efficiency
-    // This example filters after fetching, which is less efficient for large datasets.
-    // For server-side filtering:
-    // if (_startDate != null) {
-    //   queryBuilder = queryBuilder.gte('timestamp', _startDate!.toIso8601String());
-    // }
-    // if (_endDate != null) {
-    //   // Ensure endDate includes the whole day
-    //   DateTime endOfDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
-    //   queryBuilder = queryBuilder.lte('timestamp', endOfDay.toIso8601String());
-    // }
+    // Apply date filters
+    if (_startDate != null) {
+      query = query.gte('created_at', _startDate!.toIso8601String());
+    }
+    if (_endDate != null) {
+      DateTime endOfDay = DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59);
+      query = query.lte('created_at', endOfDay.toIso8601String());
+    }
 
+    // Apply search filter
+    if (searchQuery.isNotEmpty) {
+      query = query.ilike('event_type', '%${searchQuery.toLowerCase()}%');
+    }
 
-    final response = await queryBuilder;
+    // Now apply ordering and execute the query
+    final response = await query.order('created_at', ascending: false);
 
-    // Assuming response is List<Map<String, dynamic>> directly on success
-    // Or handle response.data and response.error for newer Supabase client versions
-    List<Map<String, dynamic>> detections = List<Map<String, dynamic>>.from(response as List? ?? []);
-
-
-    // Client-side filtering (as per original logic, but server-side is better for performance)
-    List<Map<String, dynamic>> filtered = detections.where((data) {
-      final className = (data['class_name'] ?? '').toString().toLowerCase();
-      final matchesSearch = searchQuery.isEmpty || className.contains(searchQuery.toLowerCase());
-
-      bool matchesDate = true;
-      if (data['timestamp'] != null) {
-        try {
-          final ts = DateTime.parse(data['timestamp'].toString());
-          if (_startDate != null && ts.isBefore(_startDate!)) {
-            matchesDate = false;
-          }
-          // Adjust endDate to be inclusive of the selected day up to its end
-          if (_endDate != null && ts.isAfter(DateTime(_endDate!.year, _endDate!.month, _endDate!.day, 23, 59, 59))) {
-            matchesDate = false;
-          }
-        } catch (e) {
-          // Handle potential parsing error if timestamp is not a valid date string
-          matchesDate = true; // Or false, depending on desired behavior for unparseable dates
-        }
-      } else if (_startDate != null || _endDate != null) {
-        // If date filters are set but item has no timestamp, exclude it
-        matchesDate = false;
-      }
-      return matchesSearch && matchesDate;
-    }).toList();
-
-    return filtered;
+    // Handle the response: newer Supabase client versions return List<Map<String, dynamic>> directly on success
+    if (response is List) {
+      return List<Map<String, dynamic>>.from(response);
+    } else {
+      // This case should ideally not happen for successful queries in newer clients,
+      // but might catch errors or unexpected formats.
+      print("Supabase fetchVideoEvents: Unexpected non-list response format: $response");
+      return [];
+    }
   }
+
 
   Future<void> _pickDate(BuildContext context, bool isStartDate) async {
     final DateTime initial = isStartDate
@@ -240,13 +297,13 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
       initialDate: initial,
       firstDate: first,
       lastDate: last,
-      builder: (context, child) { // Optional: Theme the date picker
+      builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: ColorScheme.light(
-              primary: brownColor, // Header background color
-              onPrimary: Colors.white, // Header text color
-              onSurface: Colors.black, // Body text color
+              primary: brownColor,
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
             ),
             dialogBackgroundColor: Colors.white,
           ),
@@ -260,18 +317,16 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
         setState(() {
           if (isStartDate) {
             _startDate = picked;
-            // Optional: if end date is before new start date, clear or adjust end date
             if (_endDate != null && _endDate!.isBefore(_startDate!)) {
               _endDate = null;
             }
           } else {
-            // Store end date as the end of that day for inclusive filtering
             _endDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
-            // Optional: if start date is after new end date, clear or adjust start date
             if (_startDate != null && _startDate!.isAfter(_endDate!)) {
               _startDate = null;
             }
           }
+          // No GlobalKey needed, setState will rebuild FutureBuilder
         });
       }
     }
@@ -283,11 +338,11 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          height: 58, // Consistent height like other fields
+          height: 58,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: BoxDecoration(
             color: lightFillColor,
-            borderRadius: BorderRadius.circular(20.0), // Consistent radius
+            borderRadius: BorderRadius.circular(20.0),
             border: Border.all(color: iconAndBorderColor, width: 1.5),
           ),
           child: Row(
@@ -311,29 +366,29 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
     return Column(
       children: [
         const SizedBox(height: 16),
-        // Date Pickers - Styled
+        // Date Pickers - Restored
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               _buildDatePickerField('Start Date', _startDate, () => _pickDate(context, true)),
-              const SizedBox(width: 12), // Spacing between date pickers
+              const SizedBox(width: 12),
               _buildDatePickerField('End Date', _endDate, () => _pickDate(context, false)),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        // Search Bar - Styled (same as HomePage)
+        // Search Bar - Restored
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SizedBox( // Ensure consistent height for searchbar
+          child: SizedBox(
             height: 58,
             child: TextField(
               controller: _searchController,
               onChanged: onSearchChanged,
               style: TextStyle(color: inputTextColor),
               decoration: InputDecoration(
-                hintText: 'Search by class name...',
+                hintText: 'Search by event type...',
                 hintStyle: TextStyle(color: hintTextColor),
                 prefixIcon: Icon(Icons.search, color: iconAndBorderColor),
                 filled: true,
@@ -356,58 +411,71 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
           ),
         ),
         const SizedBox(height: 16),
-        // History List
         Expanded(
+          // Removed GlobalKey, setState will rebuild FutureBuilder
           child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: fetchDetections(),
+            future: fetchVideoEvents(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator(color: brownColor));
               }
               if (snapshot.hasError) {
+                print("Error in FutureBuilder: ${snapshot.error}");
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                String message = "No history found.";
+                String message = "No video events found.";
                 if (searchQuery.isNotEmpty || _startDate != null || _endDate != null) {
                   message = "No results for the applied filters.";
                 }
                 return Center(child: Text(message));
               }
 
-              final detections = snapshot.data!;
+              final videoEvents = snapshot.data!;
 
               return ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                itemCount: detections.length,
+                itemCount: videoEvents.length,
                 itemBuilder: (context, index) {
-                  final data = detections[index];
-                  final className = data['class_name'] ?? 'Unknown Class';
-                  final timestampStr = data['timestamp']?.toString();
+                  final data = videoEvents[index];
+                  final eventType = data['event_type'] ?? 'Unknown Event';
+                  final timestampStr = data['created_at']?.toString();
                   String date = 'Unknown Date';
                   if (timestampStr != null) {
                     try {
                       final parsedDate = DateTime.parse(timestampStr).toLocal();
                       date = DateFormat('yyyy-MM-dd HH:mm').format(parsedDate);
                     } catch (e) {
-                      date = timestampStr; // Fallback to original string if parsing fails
+                      date = timestampStr;
                     }
                   }
-                  final imageUrl = data['image_url'] as String?;
+                  final videoUrl = data['video_url'] as String?;
+                  final trackId = data['track_id']?.toString() ?? 'N/A';
+                  final duration = data['duration_sec']?.toStringAsFixed(1) ?? 'N/A';
 
-                  // Card Style (same as HomePage)
+                  final bboxX = data['bbox_snapshot_x'] as double?;
+                  final bboxY = data['bbox_snapshot_y'] as double?;
+                  final bboxW = data['bbox_snapshot_w'] as double?;
+                  final bboxH = data['bbox_snapshot_h'] as double?;
+
                   return InkWell(
                     onTap: () {
-                      if (imageUrl != null && imageUrl.isNotEmpty) {
+                      if (videoUrl != null && videoUrl.isNotEmpty) {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ImageDetailPage(imageUrl: imageUrl),
+                            builder: (context) => VideoDetailPage(
+                              videoUrl: videoUrl,
+                              eventType: eventType,
+                              eventTime: date,
+                              trackId: trackId,
+                              duration: duration,
+                            ),
                           ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Image not available for this item.')),
+                          const SnackBar(content: Text('Video not available for this event.')),
                         );
                       }
                     },
@@ -432,57 +500,46 @@ class _HistoryPageBodyState extends State<HistoryPageBody> {
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        leading: (imageUrl != null && imageUrl.isNotEmpty)
-                            ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            imageUrl,
-                            width: 70,
-                            height: 70,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) => Container(
-                              width: 70,
-                              height: 70,
+                        leading: (videoUrl != null && videoUrl.isNotEmpty)
+                            ? SizedBox(
+                          width: 70,
+                          height: 70,
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
                               color: Colors.grey[200],
-                              child: Icon(Icons.broken_image_outlined, color: Colors.grey[500]),
+                              child: const Icon(Icons.videocam, color: Colors.blueGrey, size: 40),
                             ),
-                            loadingBuilder: (BuildContext context, Widget child, ImageChunkEvent? loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return SizedBox(
-                                width: 70,
-                                height: 70,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.0,
-                                    valueColor: AlwaysStoppedAnimation<Color>(brownColor),
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                        : null,
-                                  ),
-                                ),
-                              );
-                            },
                           ),
                         )
-                            : Container( // Placeholder if no image URL
+                            : Container(
                           width: 70,
                           height: 70,
                           decoration: BoxDecoration(
                             color: Colors.grey[200],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.image_not_supported, color: Colors.grey[500], size: 30),
+                          child: Icon(Icons.video_camera_back_outlined, color: Colors.grey[500], size: 30),
                         ),
                         title: Text(
-                          className,
+                          eventType,
                           style: TextStyle(
                               color: textOnCardColor,
                               fontSize: 16,
                               fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Text(
-                          date,
-                          style: TextStyle(color: subTextOnCardColor, fontSize: 13),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              date,
+                              style: TextStyle(color: subTextOnCardColor, fontSize: 13),
+                            ),
+                            Text(
+                              'ID: $trackId, Duration: $duration sec',
+                              style: TextStyle(color: subTextOnCardColor, fontSize: 12),
+                            ),
+                          ],
                         ),
                       ),
                     ),
