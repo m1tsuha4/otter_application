@@ -6,6 +6,7 @@ import 'pages/register.dart';
 import 'pages/home.dart';
 import 'pages/profile.dart';
 import 'pages/history.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -14,6 +15,8 @@ void main() async {
     url: 'https://knplpprdnkqgbgfqpcoh.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtucGxwcHJkbmtxZ2JnZnFwY29oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc1NjAxNjMsImV4cCI6MjA2MzEzNjE2M30.M8D7it9pthcAUFp_8q0FdcekCUz1OyzIdMrNcyOy7f8',
   );
+
+  await NotificationService().init();
 
   runApp(const MyApp());
 }
@@ -24,7 +27,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Otrap App',
+      title: 'Dotter App',
       initialRoute: Supabase.instance.client.auth.currentUser == null ? '/login' : '/home',
       routes: {
         '/login': (context) => LoginPage(),

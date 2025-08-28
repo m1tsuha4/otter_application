@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'dart:async'; // Still needed for Timer for debounce
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
-// Video Player related imports (now directly in home.dart as VideoDetailPage is here)
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-
+import '../services/notification_service.dart';
 
 // =============================================================================
-// VideoDetailPage: Widget to display the video event (DEFINED HERE IN HOME.DART)
+// VideoDetailPage: Widget to display the video event
 // =============================================================================
 class VideoDetailPage extends StatefulWidget {
   final String videoUrl;
@@ -45,14 +43,15 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
 
   Future<void> _initializeVideoPlayer() async {
     try {
-      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
+      _videoPlayerController =
+          VideoPlayerController.networkUrl(Uri.parse(widget.videoUrl));
       await _videoPlayerController.initialize();
       print("DEBUG: Video initialized successfully: ${widget.videoUrl}");
 
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController,
-        autoPlay: true, // Auto-play the video
-        looping: false, // Don't loop the video
+        autoPlay: true,
+        looping: false,
         errorBuilder: (context, errorMessage) {
           print("DEBUG: Chewie Error: $errorMessage");
           return Center(
@@ -87,7 +86,7 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
   @override
   Widget build(BuildContext context) {
     final Color appBarBackgroundColor = const Color(0xFFFAF5E4);
-    final Color iconColor = const Color(0xFF5C2C06); // brownColor
+    final Color iconColor = const Color(0xFF5C2C06);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -102,17 +101,23 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         centerTitle: true,
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(iconColor)))
+          ? Center(
+          child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(iconColor)))
           : _errorMessage.isNotEmpty
           ? Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, color: Colors.red, size: 50),
+            const Icon(Icons.error_outline,
+                color: Colors.red, size: 50),
             const SizedBox(height: 10),
-            Text(_errorMessage, style: const TextStyle(color: Colors.white)),
+            Text(_errorMessage,
+                style: const TextStyle(color: Colors.white)),
             const SizedBox(height: 10),
-            Text('Video URL: ${widget.videoUrl}', style: const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text('Video URL: ${widget.videoUrl}',
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 12)),
           ],
         ),
       )
@@ -120,9 +125,12 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
         children: [
           Expanded(
             child: Center(
-              child: _chewieController != null && _chewieController!.videoPlayerController.value.isInitialized
+              child: _chewieController != null &&
+                  _chewieController!
+                      .videoPlayerController.value.isInitialized
                   ? AspectRatio(
-                aspectRatio: _chewieController!.aspectRatio ?? _videoPlayerController.value.aspectRatio,
+                aspectRatio: _chewieController!.aspectRatio ??
+                    _videoPlayerController.value.aspectRatio,
                 child: Chewie(controller: _chewieController!),
               )
                   : const CircularProgressIndicator(),
@@ -133,11 +141,21 @@ class _VideoDetailPageState extends State<VideoDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Event Type: ${widget.eventType}', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                Text('Event Type: ${widget.eventType}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
-                Text('Time: ${widget.eventTime}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
-                Text('Track ID: ${widget.trackId}', style: const TextStyle(color: Colors.white70, fontSize: 16)),
-                Text('Duration: ${widget.duration} seconds', style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                Text('Time: ${widget.eventTime}',
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 16)),
+                Text('Track ID: ${widget.trackId}',
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 16)),
+                Text('Duration: ${widget.duration} seconds',
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 16)),
               ],
             ),
           ),
@@ -177,14 +195,13 @@ class _HomePageState extends State<HomePage> {
       ),
       body: const HomePageBody(),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0, // Set to 0 for Home page
+        currentIndex: 0,
         backgroundColor: const Color(0xFFFAF5E4),
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.black54,
         onTap: (index) {
           switch (index) {
             case 0:
-            // Already on Home
               break;
             case 1:
               Navigator.pushReplacementNamed(context, '/history');
@@ -205,7 +222,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 // =============================================================================
-// HomePageBody: Fetches and displays recent video events (NO FILTERS/SEARCH)
+// HomePageBody: Fetches and displays recent video events
 // =============================================================================
 class HomePageBody extends StatefulWidget {
   const HomePageBody({super.key});
@@ -215,63 +232,50 @@ class HomePageBody extends StatefulWidget {
 }
 
 class _HomePageBodyState extends State<HomePageBody> {
-  String searchQuery = '';
-  final TextEditingController _searchController = TextEditingController();
-  Timer? _debounce; // Still keep Timer for debounce if onSearchChanged is present.
+  final Stream<List<Map<String, dynamic>>> _eventsStream;
+  int _lastKnownEventCount = -1;
 
-  final Color brownColor = const Color(0xFF5C2C06);
-  final Color cardBackgroundColor = Colors.white;
-  final Color textOnCardColor = Colors.black87;
-  final Color subTextOnCardColor = Colors.black54;
-  final Color searchFillColor = Colors.white;
-  final Color searchBorderColor = const Color(0xFF5C2C06);
-  final Color searchIconColor = const Color(0xFF5C2C06);
-  final Color searchTextColor = Colors.black87;
-  final Color searchHintColor = Colors.black54;
-
-
-  // fetchRecentVideoEvents: Fetches only the 6 most recent video events
-  Future<List<Map<String, dynamic>>> fetchRecentVideoEvents() async {
-    final supabase = Supabase.instance.client;
-
-    // Fetch directly, no filters applied here.
-    // Order by 'created_at' descending and limit to 6.
-    final response = await supabase
-        .from('otter_video_events') // Fetch from your video events table
-        .select()
-        .order('created_at', ascending: false) // Order by most recent
-        .limit(6); // Limit to 6 recent items
-
-    if (response is List) {
-      return List<Map<String, dynamic>>.from(response);
-    } else {
-      print("Supabase fetchRecentVideoEvents: Unexpected non-list response format: $response");
-      return [];
-    }
-  }
+  _HomePageBodyState()
+      : _eventsStream = Supabase.instance.client
+      .from('otter_video_events')
+      .stream(primaryKey: ['id'])
+      .order('created_at', ascending: false)
+      .limit(6);
 
   @override
-  void dispose() {
-    _searchController.dispose();
-    _debounce?.cancel(); // Dispose debounce if it was used.
-    super.dispose();
+  void initState() {
+    super.initState();
+    _listenForInserts();
   }
 
-  void onSearchChanged(String query) {
-    // This method is still defined but the TextField calling it is removed from UI.
-    // It's benign to keep it or you can remove it if you're sure.
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), () {
-      if (mounted) {
-        setState(() {
-          searchQuery = query;
-        });
+  void _listenForInserts() {
+    _eventsStream.listen((List<Map<String, dynamic>> data) {
+      if (_lastKnownEventCount == -1) {
+        _lastKnownEventCount = data.length;
+        return;
       }
+      if (data.length > _lastKnownEventCount) {
+        print('New insert detected by stream.');
+        final newEvent = data.first;
+        final eventType = newEvent['event_type'] ?? 'Unknown Event';
+
+        NotificationService().showNotification(
+          DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          'New Event Detected!',
+          'A new event has occurred: $eventType',
+        );
+      }
+      _lastKnownEventCount = data.length;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final Color brownColor = const Color(0xFF5C2C06);
+    final Color cardBackgroundColor = Colors.white;
+    final Color textOnCardColor = Colors.black87;
+    final Color subTextOnCardColor = Colors.black54;
+
     return Column(
       children: [
         const SizedBox(height: 20),
@@ -280,7 +284,7 @@ class _HomePageBodyState extends State<HomePageBody> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(20),
             child: Image.asset(
-              'assets/images/otter.jpeg', // Make sure this path is correct
+              'assets/images/otter.jpeg',
               height: 200,
               width: double.infinity,
               fit: BoxFit.cover,
@@ -288,8 +292,6 @@ class _HomePageBodyState extends State<HomePageBody> {
           ),
         ),
         const SizedBox(height: 20),
-        // Removed: Search Bar UI entirely from this build method.
-        // The TextField and its styling are gone.
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Align(
@@ -302,27 +304,29 @@ class _HomePageBodyState extends State<HomePageBody> {
         ),
         const SizedBox(height: 10),
         Expanded(
-          child: FutureBuilder<List<Map<String, dynamic>>>(
-            future: fetchRecentVideoEvents(),
+          child: StreamBuilder<List<Map<String, dynamic>>>(
+            stream: _eventsStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return Center(child: CircularProgressIndicator(color: brownColor));
+                return Center(
+                    child: CircularProgressIndicator(color: brownColor));
               }
 
               if (snapshot.hasError) {
-                print("Error in FutureBuilder (HomePage): ${snapshot.error}");
+                print("Error in StreamBuilder (HomePage): ${snapshot.error}");
                 return Center(child: Text('Error: ${snapshot.error}'));
               }
 
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                // Simplified message as search is not active on this page.
-                return const Center(child: Text('No recent video events found.'));
+                return const Center(
+                    child: Text('No recent video events found.'));
               }
 
               final videoEvents = snapshot.data!;
 
               return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 itemCount: videoEvents.length,
                 itemBuilder: (context, index) {
                   final data = videoEvents[index];
@@ -331,18 +335,17 @@ class _HomePageBodyState extends State<HomePageBody> {
                   String date = 'Unknown Date';
                   if (timestampStr != null) {
                     try {
-                      final parsedDate = DateTime.parse(timestampStr).toLocal();
+                      final parsedDate =
+                      DateTime.parse(timestampStr).toLocal();
                       date = DateFormat('yyyy-MM-dd HH:mm').format(parsedDate);
                     } catch (e) {
                       date = timestampStr;
                     }
                   }
                   final videoUrl = data['video_url'] as String?;
-
-                  // Other video details are available in data, but only passed to VideoDetailPage
                   final trackId = data['track_id']?.toString() ?? 'N/A';
-                  final duration = data['duration_sec']?.toStringAsFixed(1) ?? 'N/A';
-
+                  final duration =
+                      data['duration_sec']?.toStringAsFixed(1) ?? 'N/A';
 
                   return InkWell(
                     onTap: () {
@@ -361,7 +364,8 @@ class _HomePageBodyState extends State<HomePageBody> {
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Video not available for this event.')),
+                          const SnackBar(
+                              content: Text('Video not available for this event.')),
                         );
                       }
                     },
@@ -385,7 +389,8 @@ class _HomePageBodyState extends State<HomePageBody> {
                         ],
                       ),
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         leading: (videoUrl != null && videoUrl.isNotEmpty)
                             ? SizedBox(
                           width: 70,
@@ -394,7 +399,8 @@ class _HomePageBodyState extends State<HomePageBody> {
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               color: Colors.grey[200],
-                              child: const Icon(Icons.videocam, color: Colors.blueGrey, size: 40),
+                              child: const Icon(Icons.videocam,
+                                  color: Colors.blueGrey, size: 40),
                             ),
                           ),
                         )
@@ -405,7 +411,8 @@ class _HomePageBodyState extends State<HomePageBody> {
                             color: Colors.grey[200],
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Icon(Icons.video_camera_back_outlined, color: Colors.grey[500], size: 30),
+                          child: Icon(Icons.video_camera_back_outlined,
+                              color: Colors.grey[500], size: 30),
                         ),
                         title: Text(
                           eventType,
@@ -416,7 +423,8 @@ class _HomePageBodyState extends State<HomePageBody> {
                         ),
                         subtitle: Text(
                           date,
-                          style: TextStyle(color: subTextOnCardColor, fontSize: 13),
+                          style: TextStyle(
+                              color: subTextOnCardColor, fontSize: 13),
                         ),
                       ),
                     ),
